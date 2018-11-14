@@ -1,0 +1,2 @@
+# goubus
+libubus for Golang
