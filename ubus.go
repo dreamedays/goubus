@@ -2,7 +2,7 @@ package goubus
 
 import (
 	"fmt"
-	"log"
+	//	"log"
 	"net"
 )
 
@@ -80,13 +80,29 @@ func (ctx *UbusContext) InvokeByID(peerID uint32, method string, bb *blobBuf) (*
 
 	if bb == nil {
 		// 需要构造一个空的blobBuf
-		log.Printf("make a empty blobBuf\n")
-		bb = &blobBuf{0, []byte{}}
+		//log.Printf("make a empty blobBuf\n")
+		bb = NewBlobBuf()
 	}
 
 	bbh.putData(bb)
 
+	//log.Printf("data bb dataLen %d --->\n", bb.dataLen)
+	//hexdump(bb.data[msgHeadSize:bb.dataLen])
+
+	//log.Printf("send invoke request\n")
 	ba, err := ctx.request(UBUS_MSG_INVOKE, bbh, peerID)
+	if err != nil {
+		return nil, err
+	}
+
+	//log.Printf("recv invoke response\n")
+	_, resp, err := ctx.recvMsg()
+	if err != nil {
+		return nil, err
+	}
+
+	//log.Printf("parse invoke response message\n")
+	ba, err = blobParse(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +117,7 @@ func (ctx *UbusContext) InvokeByName(object, method string, bb *blobBuf) (*blobA
 		return nil, err
 	}
 
-	log.Printf("object peerID %d\n", id)
+	//log.Printf("object peerID 0x%x\n", id)
 
 	return ctx.InvokeByID(id, method, bb)
 }

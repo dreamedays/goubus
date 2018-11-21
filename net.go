@@ -2,7 +2,7 @@ package goubus
 
 import (
 	"io"
-	"log"
+	//	"log"
 	"net"
 	"time"
 )
@@ -62,7 +62,7 @@ func (ctx *UbusContext) recvMsg() (*msgHead, []byte, error) {
 
 	padDataLen := roundUpLen(head.dataLen)
 
-	log.Printf("dataLen = %d, padDataLen = %d\n", head.dataLen, padDataLen)
+	//log.Printf("dataLen = %d, padDataLen = %d\n", head.dataLen, padDataLen)
 
 	data := make([]byte, padDataLen)
 
