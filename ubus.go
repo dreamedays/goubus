@@ -2,7 +2,7 @@ package goubus
 
 import (
 	"fmt"
-	//	"log"
+
 	"net"
 )
 
@@ -56,13 +56,13 @@ func (ctx *UbusContext) LookupID(object string) (uint32, error) {
 
 	bb.putString(UBUS_ATTR_OBJPATH, object)
 
-	ba, err := ctx.request(UBUS_MSG_LOOKUP, bb, 0)
+	_, ba, err := ctx.request(UBUS_MSG_LOOKUP, bb, 0)
 	if err != nil {
 		return 0, err
 	}
 
 	if ba[UBUS_ATTR_OBJID] == nil {
-		return 0, fmt.Errorf("not contain objid in response")
+		return 0, UbusError{UBUS_STATUS_NOT_FOUND}
 	}
 
 	id := ba[UBUS_ATTR_OBJID].getUint32()
@@ -70,7 +70,7 @@ func (ctx *UbusContext) LookupID(object string) (uint32, error) {
 	return id, nil
 }
 
-func (ctx *UbusContext) InvokeByID(peerID uint32, method string, bb *blobBuf) (*blobAttr, error) {
+func (ctx *UbusContext) InvokeByID(peerID uint32, method string, bb *BlobBuf) (*BlobAttr, error) {
 
 	bbh := NewBlobBuf()
 
@@ -90,27 +90,50 @@ func (ctx *UbusContext) InvokeByID(peerID uint32, method string, bb *blobBuf) (*
 	//hexdump(bb.data[msgHeadSize:bb.dataLen])
 
 	//log.Printf("send invoke request\n")
-	ba, err := ctx.request(UBUS_MSG_INVOKE, bbh, peerID)
+	_, _, err := ctx.request(UBUS_MSG_INVOKE, bbh, peerID)
 	if err != nil {
 		return nil, err
 	}
 
-	//log.Printf("recv invoke response\n")
-	_, resp, err := ctx.recvMsg()
+	//log.Printf("response head: %s\n", head)
+
+	head, resp, err := ctx.recvMsg()
 	if err != nil {
 		return nil, err
 	}
 
-	//log.Printf("parse invoke response message\n")
-	ba, err = blobParse(resp)
+	ba, err := blobBytesParse(resp)
 	if err != nil {
 		return nil, err
 	}
 
-	return ba[UBUS_ATTR_DATA], nil
+	if head.msgType == uint8(UBUS_MSG_STATUS) {
+		//log.Printf("recv UBUS_MSG_STATUS\n")
+
+		if ba[UBUS_ATTR_STATUS] != nil {
+			errorCode := ba[UBUS_ATTR_STATUS].getUint32()
+			if errorCode != 0 {
+				return nil, UbusError{int(errorCode)}
+			}
+		}
+	} else if head.msgType == uint8(UBUS_MSG_DATA) {
+		//log.Printf("recv UBUS_MSG_DATA\n")
+
+		//hexdump(resp)
+
+		//log.Printf("parse invoke response message\n")
+
+		if ba[UBUS_ATTR_DATA] != nil {
+			return ba[UBUS_ATTR_DATA], nil
+		} else {
+			return nil, UbusError{UBUS_STATUS_NO_DATA}
+		}
+	}
+
+	return nil, UbusError{UBUS_STATUS_UNKNOWN_ERROR}
 }
 
-func (ctx *UbusContext) InvokeByName(object, method string, bb *blobBuf) (*blobAttr, error) {
+func (ctx *UbusContext) InvokeByName(object, method string, bb *BlobBuf) (*BlobAttr, error) {
 
 	id, err := ctx.LookupID(object)
 	if err != nil {

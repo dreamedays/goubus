@@ -7,10 +7,10 @@ import (
 	"unicode"
 )
 
-type ubsMsgType int
+type UbsMsgType int
 
 const (
-	UBUS_MSG_HELLO ubsMsgType = iota
+	UBUS_MSG_HELLO UbsMsgType = iota
 	UBUS_MSG_STATUS
 	UBUS_MSG_DATA
 	UBUS_MSG_PING
@@ -26,10 +26,10 @@ const (
 	UBUS_MSG_LAST
 )
 
-type ubusMsgAttr int
+type UbusMsgAttr int
 
 const (
-	UBUS_ATTR_UNSPEC ubusMsgAttr = iota
+	UBUS_ATTR_UNSPEC UbusMsgAttr = iota
 	UBUS_ATTR_STATUS
 	UBUS_ATTR_OBJPATH
 	UBUS_ATTR_OBJID
@@ -55,6 +55,47 @@ type msgHead struct {
 	seq     uint16
 	peerID  uint32
 	dataLen uint32 // 数据长度，不包括本字段的长度
+}
+
+const (
+	UBUS_STATUS_OK = iota
+	UBUS_STATUS_INVALID_COMMAND
+	UBUS_STATUS_INVALID_ARGUMENT
+	UBUS_STATUS_METHOD_NOT_FOUND
+	UBUS_STATUS_NOT_FOUND
+	UBUS_STATUS_NO_DATA
+	UBUS_STATUS_PERMISSION_DENIED
+	UBUS_STATUS_TIMEOUT
+	UBUS_STATUS_NOT_SUPPORTED
+	UBUS_STATUS_UNKNOWN_ERROR
+	UBUS_STATUS_CONNECTION_FAILED
+
+	__UBUS_STATUS_LAST
+)
+
+var ubusErrorStr []string = []string{
+	"Success",
+	"Invalid command",
+	"Invalid argument",
+	"Method not found",
+	"Not found",
+	"No response",
+	"Permission denied",
+	"Request timed out",
+	"Operation not supported",
+	"Unknown error",
+	"Connection failed",
+}
+
+type UbusError struct {
+	ErrorCode int
+}
+
+func (ue UbusError) Error() string {
+	if ue.ErrorCode >= 0 && ue.ErrorCode < __UBUS_STATUS_LAST {
+		return ubusErrorStr[ue.ErrorCode]
+	}
+	return "Unknown error"
 }
 
 func (h *msgHead) unmarshal(b []byte) error {
@@ -88,7 +129,7 @@ func (h *msgHead) String() string {
 	return fmt.Sprintf("ver: %d, type: %d, seq: %d, peerID: %d, dataLen %d", h.version, h.msgType, h.seq, h.peerID, h.dataLen)
 }
 
-func hexdump(b []byte) {
+func Hexdump(b []byte) {
 	var i, j int
 
 	fmt.Printf("bb data len %d\n", len(b))
@@ -105,7 +146,7 @@ func hexdump(b []byte) {
 	fmt.Println()
 
 	for i = 0; i < len(b); {
-		fmt.Printf("0x%04x  ", i&0xf)
+		fmt.Printf("0x%04x  ", i&0xfff0)
 		for j = 0; i < len(b) && j < 16; {
 			fmt.Printf("%02x ", b[i])
 			i++
@@ -133,23 +174,23 @@ func hexdump(b []byte) {
 	}
 }
 
-type blobBuf struct {
+type BlobBuf struct {
 	dataLen uint32
 	data    []byte
 }
 
-func NewBlobBuf() *blobBuf {
-	var bb blobBuf
+func NewBlobBuf() *BlobBuf {
+	var bb BlobBuf
 	bb.data = make([]byte, 256)
 	bb.dataLen = msgHeadSize
 
 	return &bb
 }
 
-type blobMsgType int
+type BlobMsgType int
 
 const (
-	BLOBMSG_TYPE_UNSPEC blobMsgType = iota
+	BLOBMSG_TYPE_UNSPEC BlobMsgType = iota
 	BLOBMSG_TYPE_ARRAY
 	BLOBMSG_TYPE_TABLE
 	BLOBMSG_TYPE_STRING
@@ -163,8 +204,8 @@ const (
 	BLOBMSG_TYPE_BOOL = BLOBMSG_TYPE_INT8
 )
 
-type blobMsgPolicy struct {
-	MsgType blobMsgType
+type BlobMsgPolicy struct {
+	MsgType BlobMsgType
 	value   []byte
 }
 
@@ -175,7 +216,7 @@ func roundUpLen(l uint32) uint32 {
 
 }
 
-func (bb *blobBuf) checkSize(a uint32) {
+func (bb *BlobBuf) checkSize(a uint32) {
 	if uint32(cap(bb.data)) < bb.dataLen+a {
 		// 扩容
 		fmt.Printf("enlarge the blobbuf\n")
@@ -186,7 +227,7 @@ func (bb *blobBuf) checkSize(a uint32) {
 }
 
 // 往bb里面添加字符串，注意填充
-func (bb *blobBuf) putString(msgAttr ubusMsgAttr, str string) {
+func (bb *BlobBuf) putString(msgAttr UbusMsgAttr, str string) {
 	// 新建一个blobAttr并添加到bb末尾
 	var attrLen uint32 = uint32(4 + len(str) + 1)
 
@@ -210,7 +251,7 @@ func (bb *blobBuf) putString(msgAttr ubusMsgAttr, str string) {
 	bb.dataLen += roundLen
 }
 
-func (bb *blobBuf) putUint32(msgAttr ubusMsgAttr, v uint32) {
+func (bb *BlobBuf) putUint32(msgAttr UbusMsgAttr, v uint32) {
 	var attrLen uint32 = (4 + 4)
 
 	roundLen := roundUpLen(attrLen)
@@ -229,7 +270,7 @@ func (bb *blobBuf) putUint32(msgAttr ubusMsgAttr, v uint32) {
 }
 
 // 把b的数据加入到bb中
-func (bb *blobBuf) putData(b *blobBuf) {
+func (bb *BlobBuf) putData(b *BlobBuf) {
 	var attrLen uint32 = (4 + b.dataLen - msgHeadSize)
 
 	roundLen := roundUpLen(attrLen)
@@ -246,7 +287,7 @@ func (bb *blobBuf) putData(b *blobBuf) {
 }
 
 // 往bb里面添加一个uint8
-func (bb *blobBuf) AddBool(k string, v bool) {
+func (bb *BlobBuf) AddBool(k string, v bool) {
 	// 带扩展的blobAttr
 	// 总长度 idLen(4) + kLen(2 + len(k) + 1 + pad) + vLen(1 + pad)
 
@@ -279,7 +320,7 @@ func (bb *blobBuf) AddBool(k string, v bool) {
 }
 
 // 往bb里面添加一个uint8
-//func (bb *blobBuf) AddUint8(k string, v uint8) {
+//func (bb *BlobBuf) AddUint8(k string, v uint8) {
 //	// 带扩展的blobAttr
 //	// 总长度 idLen(4) + kLen(2 + len(k) + 1 + pad) + vLen(1 + pad)
 
@@ -307,7 +348,7 @@ func (bb *blobBuf) AddBool(k string, v bool) {
 //}
 
 //// 往bb里面添加一个uint16
-//func (bb *blobBuf) AddUint16(k string, v uint16) {
+//func (bb *BlobBuf) AddUint16(k string, v uint16) {
 //	// 带扩展的blobAttr
 //	// 总长度 idLen(4) + kLen(2 + len(k) + 1 + pad) + vLen(2 + pad)
 
@@ -335,7 +376,7 @@ func (bb *blobBuf) AddBool(k string, v bool) {
 //}
 
 // 往bb里面添加一个uint32
-func (bb *blobBuf) AddUint32(k string, v uint32) {
+func (bb *BlobBuf) AddUint32(k string, v uint32) {
 	// 带扩展的blobAttr
 	// 总长度 idLen(4) + kLen(2 + len(k) + 1 + pad) + vLen(4)
 
@@ -364,7 +405,7 @@ func (bb *blobBuf) AddUint32(k string, v uint32) {
 }
 
 //// 往bb里面添加一个uint64
-//func (bb *blobBuf) AddUint64(k string, v uint64) {
+//func (bb *BlobBuf) AddUint64(k string, v uint64) {
 //	// 带扩展的blobAttr
 //	// 总长度 idLen(4) + kLen(2 + len(k) + 1 + pad) + vLen(8)
 
@@ -378,22 +419,22 @@ func (bb *blobBuf) AddUint32(k string, v uint32) {
 //	// idLen, 4 bytes
 //	var idLen uint32 = (uint32(0x80|uint8(BLOBMSG_TYPE_INT32)) << 24) | (4 + kPad + 8)
 //	//log.Printf("AddUint64 idLen = 0x%x\n", idLen)
-//	binary.BigEndian.PutUint32(bb.data[bb.dataLen:], idLen)
+//	binary.BigEndian.putUint32(bb.data[bb.dataLen:], idLen)
 
 //	// keyLen, 2 bytes
-//	binary.BigEndian.PutUint16(bb.data[bb.dataLen+4:], kLen)
+//	binary.BigEndian.putUint16(bb.data[bb.dataLen+4:], kLen)
 
 //	// k string, len(k) + 1 + pad
 //	copy(bb.data[bb.dataLen+6:], []byte(k))
 
 //	// v, 8 bytes
-//	binary.BigEndian.PutUint64(bb.data[bb.dataLen+4+kPad:], v)
+//	binary.BigEndian.putUint64(bb.data[bb.dataLen+4+kPad:], v)
 
 //	bb.dataLen += totalLen
 //}
 
 // 往bb里面添加一个string
-func (bb *blobBuf) AddString(k string, v string) {
+func (bb *BlobBuf) AddString(k string, v string) {
 	// 带扩展的blobAttr
 	// 总长度 idLen(4) + kLen(2 + len(k) + 1 + pad) + vLen(len(v) + pad)
 
@@ -423,15 +464,15 @@ func (bb *blobBuf) AddString(k string, v string) {
 	bb.dataLen += totalLen
 }
 
-type blobAttr struct {
+type BlobAttr struct {
 	attrID  uint8
 	dataLen uint32
 	data    []byte
 }
 
 // 解析blobbuf里面的blobAttr
-func blobParse(b []byte) ([]*blobAttr, error) {
-	ba := make([]*blobAttr, UBUS_ATTR_MAX)
+func blobBytesParse(b []byte) ([]*BlobAttr, error) {
+	ba := make([]*BlobAttr, UBUS_ATTR_MAX)
 
 	//log.Printf("len(b) = %d\n", len(b))
 
@@ -454,7 +495,7 @@ func blobParse(b []byte) ([]*blobAttr, error) {
 
 		if ba[id] == nil {
 			//log.Printf("set ba[%d]\n", id)
-			ba[id] = &blobAttr{id, dataLen, b[offset+4 : offset+dataLen]}
+			ba[id] = &BlobAttr{id, dataLen, b[offset+4 : offset+dataLen]}
 		}
 
 		offset += roundUpLen(dataLen)
@@ -464,7 +505,7 @@ func blobParse(b []byte) ([]*blobAttr, error) {
 	return ba, nil
 }
 
-func (bmp blobMsgPolicy) ValueUint8() (uint8, error) {
+func (bmp BlobMsgPolicy) ValueUint8() (uint8, error) {
 	if bmp.MsgType == BLOBMSG_TYPE_INT8 {
 		return uint8(bmp.value[0]), nil
 	}
@@ -472,7 +513,7 @@ func (bmp blobMsgPolicy) ValueUint8() (uint8, error) {
 	return 0, fmt.Errorf("type error")
 }
 
-func (bmp blobMsgPolicy) ValueUint16() (uint16, error) {
+func (bmp BlobMsgPolicy) ValueUint16() (uint16, error) {
 	if bmp.MsgType == BLOBMSG_TYPE_INT16 {
 		return binary.BigEndian.Uint16(bmp.value), nil
 	}
@@ -480,7 +521,7 @@ func (bmp blobMsgPolicy) ValueUint16() (uint16, error) {
 	return 0, fmt.Errorf("type error")
 }
 
-func (bmp blobMsgPolicy) ValueUint32() (uint32, error) {
+func (bmp BlobMsgPolicy) ValueUint32() (uint32, error) {
 	if bmp.MsgType == BLOBMSG_TYPE_INT32 {
 		return binary.BigEndian.Uint32(bmp.value), nil
 	}
@@ -488,7 +529,7 @@ func (bmp blobMsgPolicy) ValueUint32() (uint32, error) {
 	return 0, fmt.Errorf("type error")
 }
 
-func (bmp blobMsgPolicy) ValueUint64() (uint64, error) {
+func (bmp BlobMsgPolicy) ValueUint64() (uint64, error) {
 	if bmp.MsgType == BLOBMSG_TYPE_INT64 {
 		return binary.BigEndian.Uint64(bmp.value), nil
 	}
@@ -496,7 +537,7 @@ func (bmp blobMsgPolicy) ValueUint64() (uint64, error) {
 	return 0, fmt.Errorf("type error")
 }
 
-func (bmp blobMsgPolicy) ValueBool() (bool, error) {
+func (bmp BlobMsgPolicy) ValueBool() (bool, error) {
 	if bmp.MsgType == BLOBMSG_TYPE_BOOL {
 		v := uint8(bmp.value[0])
 		if v == 0 {
@@ -509,7 +550,7 @@ func (bmp blobMsgPolicy) ValueBool() (bool, error) {
 	return false, fmt.Errorf("type error")
 }
 
-func (bmp blobMsgPolicy) ValueString() (string, error) {
+func (bmp BlobMsgPolicy) ValueString() (string, error) {
 	if bmp.MsgType == BLOBMSG_TYPE_STRING {
 		i := len(bmp.value) - 1
 		for i >= 0 && bmp.value[i] == byte(0) {
@@ -525,51 +566,87 @@ func (bmp blobMsgPolicy) ValueString() (string, error) {
 	return "", fmt.Errorf("type error")
 }
 
-// 解析UBUS_ATTR_DATA类型的blobAttr
-// 遍历所有blobAttr，注意这些都是应该带扩展的
-func (ba *blobAttr) BlobParse() (map[string]blobMsgPolicy, error) {
+// 将数组类型的数据解析成blobAttr列表，并返回
+func (bmp BlobMsgPolicy) ValueArray() ([]*BlobAttr, error) {
+	var array []*BlobAttr
 
-	//log.Printf("attr id = %d, len = %d\n", ba.attrID, ba.dataLen)
+	//log.Printf("value array, bmp len %d\n", len(bmp.value))
+
+	if bmp.MsgType == BLOBMSG_TYPE_ARRAY {
+		var i uint32 = 0
+		var totalLen uint32 = uint32(len(bmp.value))
+		for i < totalLen {
+			var idLen uint32 = binary.BigEndian.Uint32(bmp.value[i:])
+			var attrID uint8 = uint8((idLen >> 24) & 0xff)
+			var dataLen uint32 = idLen & 0xffffff
+
+			//log.Printf("i = %d, attrID 0x%02x, attrDataLen %d 0x%06x\n", i, attrID, dataLen, dataLen)
+
+			var kPad uint32 = 0
+			if attrID&0x80 == 0x80 {
+				// 扩展的
+				kLen := binary.BigEndian.Uint16(bmp.value[i+4:])
+				kPad = roundUpLen(uint32(kLen) + 1)
+			}
+
+			array = append(array, &BlobAttr{attrID, dataLen, bmp.value[i+4+kPad : i+dataLen]})
+
+			i += dataLen
+		}
+
+		return array, nil
+	}
+
+	return nil, fmt.Errorf("type error")
+}
+
+// 解析UBUS_ATTR_DATA类型的BlobAttr
+// 遍历所有BlobAttr，注意这些都是应该带扩展的
+func (ba *BlobAttr) BlobParse() ([]string, map[string]BlobMsgPolicy, error) {
+
+	//log.Printf("attr id = %d, len = %d 0x%x\n", ba.attrID, ba.dataLen, ba.dataLen)
 
 	//hexdump(ba.data)
 
 	var totalLen uint32 = uint32(len(ba.data))
 	var offset uint32
 	var idMsgType uint8
-	var msgType blobMsgType
+	var msgType BlobMsgType
 	var msgLen uint32
 
-	result := make(map[string]blobMsgPolicy)
+	var keys []string
+	result := make(map[string]BlobMsgPolicy)
 
 	for offset < totalLen {
 		// id(extended), type
 		idMsgType = uint8(ba.data[offset])
-		msgType = blobMsgType(idMsgType & 0x7f)
+		msgType = BlobMsgType(idMsgType & 0x7f)
 
 		// len
 		msgLen = binary.BigEndian.Uint32(ba.data[offset:])
 		msgLen = msgLen & 0xffffff
 
-		//log.Printf("msgType = %d, msgLen = %d\n", msgType, msgLen)
+		//log.Printf("msgType = %d, msgLen = %d 0x%x\n", msgType, msgLen, msgLen)
 
 		idx := offset + 4
 		nameLen := binary.BigEndian.Uint16(ba.data[idx:])
 		idx += 2
 		name := string(ba.data[idx : idx+uint32(nameLen)])
+		keys = append(keys, name)
 		idx = roundUpLen(idx + uint32(nameLen) + 1)
 
 		//log.Printf("name = %s, idx = %d\n", name, idx)
 
 		// now idx point to value
-		result[name] = blobMsgPolicy{msgType, ba.data[idx:]}
+		result[name] = BlobMsgPolicy{msgType, ba.data[idx : offset+msgLen]}
 
 		// next attr
 		offset += roundUpLen(msgLen)
 	}
 
-	return result, nil
+	return keys, result, nil
 }
 
-func (ba *blobAttr) getUint32() uint32 {
+func (ba *BlobAttr) getUint32() uint32 {
 	return binary.BigEndian.Uint32(ba.data)
 }

@@ -1,7 +1,7 @@
 package goubus
 
 // 往ubusd发送请求
-func (ctx *UbusContext) request(msgType ubsMsgType, bb *blobBuf, peerID uint32) ([]*blobAttr, error) {
+func (ctx *UbusContext) request(msgType UbsMsgType, bb *BlobBuf, peerID uint32) (*msgHead, []*BlobAttr, error) {
 	// 构造 msgHead
 	var head msgHead
 	head.version = 0
@@ -18,21 +18,22 @@ func (ctx *UbusContext) request(msgType ubsMsgType, bb *blobBuf, peerID uint32) 
 
 	err := ctx.sendMsg(bb.data[0:bb.dataLen])
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	_, data, err := ctx.recvMsg()
+	respHead, data, err := ctx.recvMsg()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	//log.Printf("response message hexdump:\n")
+	//log.Printf("respHead, type %d\n", respHead.msgType)
+	//log.Printf("response message head hexdump:\n")
 	//hexdump(data)
 
-	ba, err := blobParse(data)
+	ba, err := blobBytesParse(data)
 	if err != nil {
-		return nil, err
+		return respHead, nil, err
 	}
 
-	return ba, nil
+	return respHead, ba, nil
 }

@@ -51,6 +51,8 @@ func (ctx *UbusContext) sendMsg(b []byte) error {
 }
 
 func (ctx *UbusContext) recvMsg() (*msgHead, []byte, error) {
+
+	// 收取头部
 	b := make([]byte, msgHeadSize)
 	_, err := io.ReadFull(ctx.conn, b)
 	if err != nil {
@@ -64,8 +66,8 @@ func (ctx *UbusContext) recvMsg() (*msgHead, []byte, error) {
 
 	//log.Printf("dataLen = %d, padDataLen = %d\n", head.dataLen, padDataLen)
 
+	// 收取数据部分
 	data := make([]byte, padDataLen)
-
 	_, err = io.ReadFull(ctx.conn, data)
 	if err != nil {
 		return &head, nil, err
